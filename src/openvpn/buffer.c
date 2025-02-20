@@ -5,7 +5,7 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
- *  Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
+ *  Copyright (C) 2002-2024 OpenVPN Inc <sales@openvpn.net>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2
@@ -279,32 +279,6 @@ buf_puts(struct buffer *buf, const char *str)
     return ret;
 }
 
-
-/*
- * This is necessary due to certain buggy implementations of snprintf,
- * that don't guarantee null termination for size > 0.
- *
- * Return false on overflow.
- *
- * This functionality is duplicated in src/openvpnserv/common.c
- * Any modifications here should be done to the other place as well.
- */
-
-bool
-openvpn_snprintf(char *str, size_t size, const char *format, ...)
-{
-    va_list arglist;
-    int len = -1;
-    if (size > 0)
-    {
-        va_start(arglist, format);
-        len = vsnprintf(str, size, format, arglist);
-        va_end(arglist);
-        str[size - 1] = 0;
-    }
-    return (len >= 0 && len < size);
-}
-
 /*
  * write a string to the end of a buffer that was
  * truncated by buf_printf
@@ -322,24 +296,6 @@ buf_catrunc(struct buffer *buf, const char *str)
     }
 }
 
-/*
- * convert a multi-line output to one line
- */
-void
-convert_to_one_line(struct buffer *buf)
-{
-    uint8_t *cp = BPTR(buf);
-    int len = BLEN(buf);
-    while (len--)
-    {
-        if (*cp == '\n')
-        {
-            *cp = '|';
-        }
-        ++cp;
-    }
-}
-
 bool
 buffer_write_file(const char *filename, const struct buffer *buf)
 {
@@ -352,7 +308,7 @@ buffer_write_file(const char *filename, const struct buffer *buf)
         return false;
     }
 
-    const int size = write(fd, BPTR(buf), BLEN(buf));
+    const ssize_t size = write(fd, BPTR(buf), BLEN(buf));
     if (size != BLEN(buf))
     {
         msg(M_ERRNO, "Write error on file '%s'", filename);
@@ -822,7 +778,7 @@ bool
 buf_string_match_head_str(const struct buffer *src, const char *match)
 {
     const size_t size = strlen(match);
-    if (size < 0 || size > src->len)
+    if (size > src->len)
     {
         return false;
     }
@@ -889,7 +845,7 @@ buf_parse(struct buffer *buf, const int delim, char *line, const int size)
         {
             break;
         }
-        line[n++] = c;
+        line[n++] = (char)c;
     }
     while (c);
 
@@ -1111,6 +1067,23 @@ string_mod(char *str, const unsigned int inclusive, const unsigned int exclusive
         }
     }
     return ret;
+}
+
+bool
+string_check_buf(struct buffer *buf, const unsigned int inclusive, const unsigned int exclusive)
+{
+    ASSERT(buf);
+
+    for (int i = 0; i < BLEN(buf); i++)
+    {
+        char c = BSTR(buf)[i];
+
+        if (!char_inc_exc(c, inclusive, exclusive))
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 const char *

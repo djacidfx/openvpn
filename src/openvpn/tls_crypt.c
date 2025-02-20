@@ -301,7 +301,7 @@ tls_crypt_unwrap(const struct buffer *src, struct buffer *dst,
         struct buffer tmp = *src;
         ASSERT(buf_advance(&tmp, TLS_CRYPT_OFF_PID));
         ASSERT(packet_id_read(&pin, &tmp, true));
-        if (!crypto_check_replay(opt, &pin, error_prefix, &gc))
+        if (!crypto_check_replay(opt, &pin, 0, error_prefix, &gc))
         {
             CRYPT_ERROR("packet replay");
         }
@@ -377,7 +377,11 @@ tls_crypt_v2_init_server_key(struct key_ctx *key_ctx, bool encrypt,
     {
         msg(M_FATAL, "ERROR: --tls-crypt-v2 not supported");
     }
-    init_key_ctx(key_ctx, &srv_key, &kt, encrypt, "tls-crypt-v2 server key");
+    struct key_parameters srv_key_params;
+
+    key_parameters_from_key(&srv_key_params, &srv_key);
+
+    init_key_ctx(key_ctx, &srv_key_params, &kt, encrypt, "tls-crypt-v2 server key");
     secure_memzero(&srv_key, sizeof(srv_key));
 }
 
@@ -574,8 +578,8 @@ tls_crypt_v2_verify_metadata(const struct tls_wrap_ctx *ctx,
     }
 
     char metadata_type_str[4] = { 0 }; /* Max value: 255 */
-    openvpn_snprintf(metadata_type_str, sizeof(metadata_type_str),
-                     "%i", metadata_type);
+    snprintf(metadata_type_str, sizeof(metadata_type_str),
+             "%i", (uint8_t) metadata_type);
     struct env_set *es = env_set_create(NULL);
     setenv_str(es, "script_type", "tls-crypt-v2-verify");
     setenv_str(es, "metadata_type", metadata_type_str);
@@ -634,7 +638,7 @@ tls_crypt_v2_extract_client_key(struct buffer *buf,
     memcpy(&net_len, BEND(&wrapped_client_key) - sizeof(net_len),
            sizeof(net_len));
 
-    size_t wkc_len = ntohs(net_len);
+    uint16_t wkc_len = ntohs(net_len);
     if (!buf_advance(&wrapped_client_key, BLEN(&wrapped_client_key) - wkc_len))
     {
         msg(D_TLS_ERRORS, "Can not locate tls-crypt-v2 client key");
@@ -688,7 +692,7 @@ tls_crypt_v2_write_client_key_file(const char *filename,
     struct buffer client_key_pem = { 0 };
     struct buffer dst = alloc_buf_gc(TLS_CRYPT_V2_CLIENT_KEY_LEN
                                      + TLS_CRYPT_V2_MAX_WKC_LEN, &gc);
-    struct key2 client_key = { 2 };
+    struct key2 client_key = { .n = 2 };
 
     if (!rand_bytes((void *)client_key.keys, sizeof(client_key.keys)))
     {

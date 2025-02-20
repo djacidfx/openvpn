@@ -34,6 +34,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include "test_common.h"
 #include "tls_crypt.c"
 
 /* Define this function here as dummy since including the ssl_*.c files
@@ -136,7 +137,7 @@ __wrap_rand_bytes(uint8_t *output, int len)
 {
     for (int i = 0; i < len; i++)
     {
-        output[i] = i;
+        output[i] = (uint8_t)i;
     }
     return true;
 }
@@ -156,7 +157,8 @@ test_tls_crypt_setup(void **state)
     struct test_tls_crypt_context *ctx = calloc(1, sizeof(*ctx));
     *state = ctx;
 
-    struct key key = { 0 };
+    struct key_parameters key = { .cipher = { 0 }, .hmac = { 0 },
+                                  .hmac_size = MAX_HMAC_KEY_LENGTH, .cipher_size = MAX_CIPHER_KEY_LENGTH };
 
     ctx->kt = tls_crypt_kt();
     if (!ctx->kt.cipher || !ctx->kt.digest)
@@ -366,7 +368,8 @@ tls_crypt_fail_invalid_key(void **state)
     skip_if_tls_crypt_not_supported(ctx);
 
     /* Change decrypt key */
-    struct key key = { { 1 } };
+    struct key_parameters key = { .cipher = { 1 }, .hmac = { 1 },
+                                  .cipher_size = MAX_CIPHER_KEY_LENGTH, .hmac_size = MAX_HMAC_KEY_LENGTH };
     free_key_ctx(&ctx->co.key_ctx_bi.decrypt);
     init_key_ctx(&ctx->co.key_ctx_bi.decrypt, &key, &ctx->kt, false, "TEST");
 
@@ -673,6 +676,7 @@ test_tls_crypt_v2_write_client_key_file_metadata(void **state)
 int
 main(void)
 {
+    openvpn_unit_test_setup();
     const struct CMUnitTest tests[] = {
         cmocka_unit_test_setup_teardown(tls_crypt_loopback,
                                         test_tls_crypt_setup,

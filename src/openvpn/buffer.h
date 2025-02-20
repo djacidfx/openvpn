@@ -5,7 +5,7 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
- *  Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
+ *  Copyright (C) 2002-2024 OpenVPN Inc <sales@openvpn.net>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2
@@ -448,19 +448,6 @@ __attribute__ ((format(__printf__, 2, 3)))
  */
 bool buf_puts(struct buffer *buf, const char *str);
 
-/*
- * Like snprintf but guarantees null termination for size > 0
- */
-bool openvpn_snprintf(char *str, size_t size, const char *format, ...)
-#ifdef __GNUC__
-#if __USE_MINGW_ANSI_STDIO
-__attribute__ ((format(gnu_printf, 3, 4)))
-#else
-__attribute__ ((format(__printf__, 3, 4)))
-#endif
-#endif
-;
-
 
 /*
  * remove/add trailing characters
@@ -498,11 +485,6 @@ bool buffer_write_file(const char *filename, const struct buffer *buf);
  * truncated by buf_printf
  */
 void buf_catrunc(struct buffer *buf, const char *str);
-
-/*
- * convert a multi-line output to one line
- */
-void convert_to_one_line(struct buffer *buf);
 
 /*
  * Parse a string based on a given delimiter char
@@ -956,6 +938,18 @@ bool string_class(const char *str, const unsigned int inclusive, const unsigned 
  */
 bool string_mod(char *str, const unsigned int inclusive, const unsigned int exclusive, const char replace);
 
+
+/**
+ * Check a buffer if it only consists of allowed characters.
+ *
+ * @param buf The buffer to be checked.
+ * @param inclusive The character classes that are allowed.
+ * @param exclusive Character classes that are not allowed even if they are also in inclusive.
+ * @return True if the string consists only of allowed characters, false otherwise.
+ */
+bool
+string_check_buf(struct buffer *buf, const unsigned int inclusive, const unsigned int exclusive);
+
 /**
  * Returns a copy of a string with certain classes of characters of it replaced with a specified
  * character.
@@ -1224,7 +1218,7 @@ struct buffer_list *buffer_list_file(const char *fn, int max_line_len);
 /**
  * buffer_read_from_file - copy the content of a file into a buffer
  *
- * @param file      path to the file to read
+ * @param filename  path to the file to read
  * @param gc        the garbage collector to use when allocating the buffer. It
  *                  is passed to alloc_buf_gc() and therefore can be NULL.
  *

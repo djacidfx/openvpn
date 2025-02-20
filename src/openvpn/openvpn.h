@@ -5,7 +5,7 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
- *  Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
+ *  Copyright (C) 2002-2024 OpenVPN Inc <sales@openvpn.net>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2
@@ -48,7 +48,7 @@
 
 /*
  * Our global key schedules, packaged thusly
- * to facilitate --persist-key.
+ * to facilitate key persistence.
  */
 
 struct key_schedule
@@ -154,7 +154,8 @@ struct context_0
  */
 struct context_1
 {
-    struct link_socket_addr link_socket_addr;
+    int link_sockets_num;
+    struct link_socket_addr *link_socket_addrs;
     /**< Local and remote addresses on the
      *   external network. */
 
@@ -200,10 +201,6 @@ struct context_1
     /**< Hash of option strings received from the
      *   remote OpenVPN server.  Only used in
      *   client-mode. */
-
-    struct user_pass *auth_user_pass;
-    /**< Username and password for
-     *   authentication. */
 };
 
 
@@ -237,11 +234,11 @@ struct context_2
     /* bitmask for event status. Check event.h for possible values */
     unsigned int event_set_status;
 
-    struct link_socket *link_socket;     /* socket used for TCP/UDP connection to remote */
+    struct link_socket **link_sockets;
+    struct link_socket_info **link_socket_infos;
+
     bool link_socket_owned;
 
-    /** This variable is used instead link_socket->info for P2MP UDP childs */
-    struct link_socket_info *link_socket_info;
     const struct link_socket *accept_from; /* possibly do accept() on a parent link_socket */
 
     struct link_socket_actual *to_link_addr;    /* IP address of remote */

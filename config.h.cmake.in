@@ -35,6 +35,9 @@
 /* Enable LZO compression library */
 #cmakedefine ENABLE_LZO
 
+/* Enable NTLMv2 proxy support */
+#define ENABLE_NTLM 1
+
 /* Enable management server capability */
 #define ENABLE_MANAGEMENT 1
 
@@ -61,9 +64,6 @@
 
 /* Enable --x509-username-field feature */
 #cmakedefine ENABLE_X509ALTUSERNAME
-
-/* Compiler supports anonymous unions */
-#define HAVE_ANONYMOUS_UNION_SUPPORT
 
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #cmakedefine HAVE_ARPA_INET_H 1
@@ -175,14 +175,8 @@ don't. */
 /* Define to 1 if you have the <linux/types.h> header file. */
 #cmakedefine HAVE_LINUX_TYPES_H
 
-/* Define to 1 if you have the <lzoconf.h> header file. */
-#define HAVE_LZO_CONF_H
-
 /* Define to 1 if you have the <lzo1x.h> header file. */
 #define HAVE_LZO1X_H 1
-
-/* Define to 1 if you have the <lzoutil.h> header file. */
-#define HAVE_LZOUTIL_H 1
 
 /* Define to 1 if you have the `mlockall' function. */
 #cmakedefine HAVE_MLOCKALL
@@ -207,9 +201,6 @@ don't. */
 
 /* Define to 1 if you have the <net/if_tun.h> header file. */
 #cmakedefine HAVE_NET_IF_TUN_H
-
-/* Define to 1 if you have the <net/if_utun.h> header file. */
-#cmakedefine01 HAVE_NET_IF_UTUN_H
 
 /* Define to 1 if you have the <net/tun/if_tun.h> header file. */
 #cmakedefine HAVE_NET_TUN_IF_TUN_H
@@ -441,6 +432,9 @@ don't. */
 /* Are we running WIN32? */
 #cmakedefine TARGET_WIN32
 
+/* Are we targeting Android? */
+#cmakedefine TARGET_ANDROID
+
 #define TARGET_ALIAS "@CMAKE_SYSTEM_NAME@"
 
 /* Enable GNU extensions on systems that have them.  */
@@ -448,8 +442,10 @@ don't. */
 # define _GNU_SOURCE 1
 #endif
 
-
-#if defined(_WIN32)
+/* if inttypes.h is included this breaks rc.exe when using the ClangCL
+ * Toolchain as it pulls in a inttypes.h variant for clang that rc.exe does
+ * not understand (#include_next preprocessor directive) */
+#if defined(_WIN32) && !defined(RC_INVOKED)
 #include <inttypes.h>
 typedef uint32_t in_addr_t;
 typedef uint16_t in_port_t;
@@ -461,7 +457,7 @@ typedef uint16_t in_port_t;
 #define SIGTERM   15
 #endif
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && !defined(RC_INVOKED)
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
 #define strncasecmp strnicmp

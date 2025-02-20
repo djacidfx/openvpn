@@ -54,7 +54,7 @@ ReportStatusToSCMgr(SERVICE_STATUS_HANDLE service, SERVICE_STATUS *status)
 }
 
 static int
-CmdInstallServices()
+CmdInstallServices(void)
 {
     SC_HANDLE service;
     SC_HANDLE svc_ctl_mgr;
@@ -146,7 +146,7 @@ CmdStartService(openvpn_service_type type)
 
 
 static int
-CmdRemoveServices()
+CmdRemoveServices(void)
 {
     SC_HANDLE service;
     SC_HANDLE svc_ctl_mgr;
@@ -282,8 +282,8 @@ _tmain(int argc, TCHAR *argv[])
                 wprintf(TEXT("-instance interactive <id>\n")
                         TEXT("   Runs the service as an alternate instance.\n")
                         TEXT("   The service settings will be loaded from\n")
-                        TEXT("   HKLM\\Software\\" PACKAGE_NAME "<id> registry key, and the service will accept\n")
-                        TEXT("   requests on \\\\.\\pipe\\" PACKAGE "<id>\\service named pipe.\n"));
+                        TEXT("   HKLM\\Software\\") TEXT(PACKAGE_NAME) TEXT("<id> registry key, and the service will accept\n")
+                        TEXT("   requests on \\\\.\\pipe\\") TEXT(PACKAGE) TEXT("<id>\\service named pipe.\n"));
 
                 return 0;
             }

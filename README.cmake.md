@@ -17,6 +17,10 @@ also makes cross-building with MinGW on Linux much simpler. However,
 builds are also possible by providing the build dependencies manually,
 but that might require specifying more information to CMake.
 
+You need at least CMake version 3.21 or newer for the `CMakePreset.json`
+file to be supported. Manual builds might be possible with older CMake
+versions, see `cmake_minimum_required` in `CMakeLists.txt`.
+
 If you're looking to build the full Windows installer MSI, take a look
 at https://github.com/OpenVPN/openvpn-build.git .
 
@@ -27,7 +31,7 @@ The following tools are expected to be present on the system, you
 can install them with a package manager of your choice (e.g.
 chocolatey, winget) or manually:
 
-* CMake
+* CMake (>= 3.21)
 * Git
 * Python (3.x), plus the Python module `docutils`
 * Visual Studion 17 (2022), C/C++ Enviroment
@@ -101,6 +105,7 @@ To build the Windows executables on a Linux system:
     git clone https://github.com/OpenVPN/openvpn.git
     export VCPKG_ROOT=$PWD/vcpkg
     cd openvpn
+    # requires CMake 3.21 or newer
     cmake --preset mingw-x64
     cmake --build --preset mingw-x64
     # unit tests are built, but no testPreset is provided. You need to copy
@@ -135,3 +140,17 @@ to cmake to be able to use these builds.
 The `unix-native` CMake preset is available for these builds. This preset does
 not require VCPKG and instead assumes all build-dependencies are provided by
 the system natively.
+
+Generating compile_commands.json
+--------------------------------
+
+To have the CMake buildsystem generate compile_commands.json you can specify
+`-DENABLE_COMPILE_COMMANDS=ON` on the command line or enable the CMake option
+another way you like. For supported generators the file will then be created.
+Additionally, the buildsystem will create a symlink `build/` to the --preset
+build directory that contains the generated JSON file. This is done so that
+clangd is able to find it.
+
+Enabling this option may cause an error on Windows, since creating a symlink
+is a privileged operation there. If you enable Developer Mode for the system,
+symlinks can be created by regular users.

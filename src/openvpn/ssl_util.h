@@ -5,7 +5,7 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
- *  Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
+ *  Copyright (C) 2002-2024 OpenVPN Inc <sales@openvpn.net>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2
@@ -22,8 +22,10 @@
  */
 
 /**
- * @file SSL utility function. This file (and its .c file) is designed to
- *       to be included in units/etc without pulling in a lot of dependencies
+ * @file
+ * SSL utility functions.
+ * This file (and its .c file) is designed to to be included in units/etc
+ * without pulling in a lot of dependencies.
  */
 
 #ifndef SSL_UTIL_H_

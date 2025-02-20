@@ -5,7 +5,7 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
- *  Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
+ *  Copyright (C) 2002-2024 OpenVPN Inc <sales@openvpn.net>
  *  Copyright (C) 2010-2021 Fox Crypto B.V. <openvpn@foxcrypto.com>
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -23,7 +23,8 @@
  */
 
 /**
- * @file Control Channel Verification Module OpenSSL implementation
+ * @file
+ * Control Channel Verification Module OpenSSL implementation
  */
 
 #ifdef HAVE_CONFIG_H
@@ -279,7 +280,7 @@ backend_x509_get_username(char *common_name, int cn_len,
             gc_free(&gc);
             return FAILURE;
         }
-        openvpn_snprintf(common_name, cn_len, "0x%s", serial);
+        snprintf(common_name, cn_len, "0x%s", serial);
         gc_free(&gc);
     }
     else
@@ -318,6 +319,29 @@ backend_x509_get_serial_hex(openvpn_x509_cert_t *cert, struct gc_arena *gc)
     const ASN1_INTEGER *asn1_i = X509_get_serialNumber(cert);
 
     return format_hex_ex(asn1_i->data, asn1_i->length, 0, 1, ":", gc);
+}
+
+result_t
+backend_x509_write_pem(openvpn_x509_cert_t *cert, const char *filename)
+{
+    BIO *out = BIO_new_file(filename, "w");
+    if (!out)
+    {
+        goto err;
+    }
+
+    if (!PEM_write_bio_X509(out, cert))
+    {
+        goto err;
+    }
+    BIO_free(out);
+
+    return SUCCESS;
+err:
+    BIO_free(out);
+    crypto_msg(D_TLS_DEBUG_LOW, "Error writing X509 certificate to file %s",
+               filename);
+    return FAILURE;
 }
 
 struct buffer
@@ -431,7 +455,7 @@ do_setenv_x509(struct env_set *es, const char *name, char *value, int depth)
     name_expand_size = 64 + strlen(name);
     name_expand = (char *) malloc(name_expand_size);
     check_malloc_return(name_expand);
-    openvpn_snprintf(name_expand, name_expand_size, "X509_%d_%s", depth, name);
+    snprintf(name_expand, name_expand_size, "X509_%d_%s", depth, name);
     setenv_str(es, name_expand, value);
     free(name_expand);
 }
@@ -574,8 +598,8 @@ x509_setenv(struct env_set *es, int cert_depth, openvpn_x509_cert_t *peer_cert)
         name_expand_size = 64 + strlen(objbuf);
         name_expand = (char *) malloc(name_expand_size);
         check_malloc_return(name_expand);
-        openvpn_snprintf(name_expand, name_expand_size, "X509_%d_%s", cert_depth,
-                         objbuf);
+        snprintf(name_expand, name_expand_size, "X509_%d_%s", cert_depth,
+                 objbuf);
         string_mod(name_expand, CC_PRINT, CC_CRLF, '_');
         string_mod((char *)buf, CC_PRINT, CC_CRLF, '_');
         setenv_str_incr(es, name_expand, (char *)buf);

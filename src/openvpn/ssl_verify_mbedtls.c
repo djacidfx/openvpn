@@ -5,7 +5,7 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
- *  Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
+ *  Copyright (C) 2002-2024 OpenVPN Inc <sales@openvpn.net>
  *  Copyright (C) 2010-2021 Fox Crypto B.V. <openvpn@foxcrypto.com>
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -23,7 +23,8 @@
  */
 
 /**
- * @file Control Channel Verification Module mbed TLS backend
+ * @file
+ * Control Channel Verification Module mbed TLS backend
  */
 
 #ifdef HAVE_CONFIG_H
@@ -86,8 +87,8 @@ verify_callback(void *session_obj, mbedtls_x509_crt *cert, int cert_depth,
         char *serial = backend_x509_get_serial(cert, &gc);
 
         ret = mbedtls_x509_crt_verify_info(errstr, sizeof(errstr)-1, "", *flags);
-        if (ret <= 0 && !openvpn_snprintf(errstr, sizeof(errstr),
-                                          "Could not retrieve error string, flags=%" PRIx32, *flags))
+        if (ret <= 0 && !snprintf(errstr, sizeof(errstr),
+                                  "Could not retrieve error string, flags=%" PRIx32, *flags))
         {
             errstr[0] = '\0';
         }
@@ -218,6 +219,41 @@ backend_x509_get_serial_hex(mbedtls_x509_crt *cert, struct gc_arena *gc)
     return buf;
 }
 
+result_t
+backend_x509_write_pem(openvpn_x509_cert_t *cert, const char *filename)
+{
+    /* mbed TLS does not make it easy to write a certificate in PEM format.
+     * The only way is to directly access the DER encoded raw certificate
+     * and PEM encode it ourselves */
+
+    struct gc_arena gc = gc_new();
+    /* just do a very loose upper bound for the base64 based PEM encoding
+     * using 3 times the space for the base64 and 100 bytes for the
+     * headers and footer */
+    struct buffer pem = alloc_buf_gc(cert->raw.len * 3 + 100, &gc);
+
+    struct buffer der = {};
+    buf_set_read(&der, cert->raw.p, cert->raw.len);
+
+    if (!crypto_pem_encode("CERTIFICATE", &pem,  &der, &gc))
+    {
+        goto err;
+    }
+
+    if (!buffer_write_file(filename, &pem))
+    {
+        goto err;
+    }
+
+    gc_free(&gc);
+    return SUCCESS;
+err:
+    msg(D_TLS_DEBUG_LOW, "Error writing X509 certificate to file %s",
+        filename);
+    gc_free(&gc);
+    return FAILURE;
+}
+
 static struct buffer
 x509_get_fingerprint(const mbedtls_md_info_t *md_info, mbedtls_x509_crt *cert,
                      struct gc_arena *gc)
@@ -272,7 +308,7 @@ do_setenv_x509(struct env_set *es, const char *name, char *value, int depth)
     name_expand_size = 64 + strlen(name);
     name_expand = (char *) malloc(name_expand_size);
     check_malloc_return(name_expand);
-    openvpn_snprintf(name_expand, name_expand_size, "X509_%d_%s", depth, name);
+    snprintf(name_expand, name_expand_size, "X509_%d_%s", depth, name);
     setenv_str(es, name_expand, value);
     free(name_expand);
 }
@@ -396,13 +432,13 @@ x509_setenv(struct env_set *es, int cert_depth, mbedtls_x509_crt *cert)
 
         if (0 == mbedtls_oid_get_attr_short_name(&name->oid, &shortname) )
         {
-            openvpn_snprintf(name_expand, sizeof(name_expand), "X509_%d_%s",
-                             cert_depth, shortname);
+            snprintf(name_expand, sizeof(name_expand), "X509_%d_%s",
+                     cert_depth, shortname);
         }
         else
         {
-            openvpn_snprintf(name_expand, sizeof(name_expand), "X509_%d_\?\?",
-                             cert_depth);
+            snprintf(name_expand, sizeof(name_expand), "X509_%d_\?\?",
+                     cert_depth);
         }
 
         for (i = 0; i < name->val.len; i++)

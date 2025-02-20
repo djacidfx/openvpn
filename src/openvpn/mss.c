@@ -5,7 +5,7 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
- *  Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
+ *  Copyright (C) 2002-2024 OpenVPN Inc <sales@openvpn.net>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2
@@ -165,7 +165,7 @@ mss_fixup_dowork(struct buffer *buf, uint16_t maxmss)
         return;
     }
 
-    for (olen = hlen - sizeof(struct openvpn_tcphdr),
+    for (olen = hlen - (int) sizeof(struct openvpn_tcphdr),
          opt = (uint8_t *)(tc + 1);
          olen > 1;
          olen -= optlen, opt += optlen)
@@ -357,7 +357,7 @@ frame_adjust_path_mtu(struct context *c)
     struct link_socket_info *lsi = get_link_socket_info(c);
     struct options *o = &c->options;
 
-    int pmtu = c->c2.link_socket->mtu;
+    int pmtu = c->c2.link_sockets[0]->mtu;
     sa_family_t af = lsi->lsa->actual.dest.addr.sa.sa_family;
     int proto = lsi->proto;
 

@@ -1,5 +1,5 @@
 TLS Mode Options
-----------------
+````````````````
 
 TLS mode is the most powerful crypto mode of OpenVPN in both security
 and flexibility. TLS mode works by establishing control and data
@@ -85,10 +85,17 @@ certificates and keys: https://github.com/OpenVPN/easy-rsa
   OpenVPN will log the usual warning in the logs if the relevant CRL is
   missing, but the connection will be allowed.
 
---cert file
-  Local peer's signed certificate in .pem format -- must be signed by a
-  certificate authority whose certificate is in ``--ca file``. Each peer
-  in an OpenVPN link running in TLS mode should have its own certificate
+--cert file|uri
+  Local peer's signed certificate in .pem format or as a URI -- must be
+  signed by a certificate authority whose certificate is in ``--ca file``
+  in the peer configuration. URI is supported only when built with
+  OpenSSL 3.0 or later and any required providers are loaded. Types
+  of URIs supported and their syntax depends on providers. OpenSSL has
+  internal support for "file:/absolute/path" URI in which case the scheme
+  "file:" is optional, and any file format recognized by OpenSSL (e.g., PEM,
+  PKCS12) is supported. PKCS#11 URI (RFC 7512) is supported by pkcs11-provider.
+
+  Each peer in an OpenVPN link running in TLS mode should have its own certificate
   and private key file. In addition, each certificate should have been
   signed by the key of a certificate authority whose public key resides in
   the ``--ca`` certificate authority file. You can easily make your own
@@ -203,10 +210,11 @@ certificates and keys: https://github.com/OpenVPN/easy-rsa
   The ``--hand-window`` parameter also controls the amount of time that
   the OpenVPN client repeats the pull request until it times out.
 
---key file
-  Local peer's private key in .pem format. Use the private key which was
-  generated when you built your peer's certificate (see ``--cert file``
-  above).
+--key file|uri
+  Local peer's private key in .pem format or a URI. Use the private key
+  which was generated when you built your peer's certificate (see
+  ``--cert file`` above). URI is supported only when built with OpenSSL 3.0
+  or later and any required providers are loaded. (See `--cert` for more details).
 
 --pkcs12 file
   Specify a PKCS #12 file containing local private key, local certificate,
@@ -538,7 +546,9 @@ certificates and keys: https://github.com/OpenVPN/easy-rsa
   stack (including the notoriously dangerous X.509 and ASN.1 stacks) to
   the connecting client.
 
-  OpenVPN supplies the following environment variables to the command:
+  OpenVPN supplies the following environment variables to the command (and
+  only these variables. The normal environment variables available for
+  other scripts are NOT present):
 
   * :code:`script_type` is set to :code:`tls-crypt-v2-verify`
 
@@ -695,9 +705,28 @@ If the option is inlined, ``algo`` is always :code:`SHA256`.
 --x509-track attribute
   Save peer X509 **attribute** value in environment for use by plugins and
   management interface. Prepend a :code:`+` to ``attribute`` to save values
-  from full cert chain. Values will be encoded as
-  :code:`X509_<depth>_<attribute>=<value>`. Multiple ``--x509-track``
+  from full cert chain. Otherwise the attribute will only be exported for
+  the leaf cert (i.e. depth :code:`0` of the cert chain). Values will be
+  encoded as :code:`X509_<depth>_<attribute>=<value>`. Multiple ``--x509-track``
   options can be defined to track multiple attributes.
+
+  ``attribute`` can be any part of the X509 Subject field or any X509v3
+  extension (RFC 3280). X509v3 extensions might not be supported when
+  not using the default TLS backend library (OpenSSL). You can also
+  request the ``SHA1`` and ``SHA256`` fingerprints of the cert,
+  but that is always exported as :code:`tls_digest_{n}` and
+  :code:`tls_digest_sha256_{n}` anyway.
+
+  Note that by default **all** parts of the X509 Subject field are exported in
+  the environment for the whole cert chain. If you use ``--x509-track`` at least
+  once **only** the attributes specified by these options are exported.
+
+  Examples::
+
+    x509-track CN               # exports only X509_0_CN
+    x509-track +CN              # exports X509_{n}_CN for chain
+    x509-track basicConstraints # exports value of "X509v3 Basic Constraints"
+    x509-track SHA256           # exports SHA256 fingerprint
 
 --x509-username-field args
   Fields in the X.509 certificate subject to be used as the username
@@ -715,11 +744,13 @@ If the option is inlined, ``algo`` is always :code:`SHA256`.
   ::
 
      x509-username-field emailAddress
+     x509-username-field 1.2.840.113549.1.9.1
      x509-username-field ext:subjectAltName
      x509-username-field CN serialNumber
 
-  The first example uses the value of the :code:`emailAddress` attribute
-  in the certificate's Subject field as the username. The second example
+  The first two examples use the value of the :code:`emailAddress` attribute
+  in the certificate's Subject field as the username, where the first example
+  uses the name while the second example uses the oid. The third example
   uses the :code:`ext:` prefix to signify that the X.509 extension
   ``fieldname`` :code:`subjectAltName` be searched for an rfc822Name
   (email) field to be used as the username. In cases where there are
@@ -733,12 +764,6 @@ If the option is inlined, ``algo`` is always :code:`SHA256`.
 
   Only the :code:`subjectAltName` and :code:`issuerAltName` X.509
   extensions and :code:`serialNumber` X.509 attribute are supported.
-
-  **Please note:** This option has a feature which will convert an
-  all-lowercase ``fieldname`` to uppercase characters, e.g.,
-  :code:`ou` -> :code:`OU`. A mixed-case ``fieldname`` or one having the
-  :code:`ext:` prefix will be left as-is. This automatic upcasing feature is
-  deprecated and will be removed in a future release.
 
   Non-compliant symbols are being replaced with the :code:`_` symbol, same as
   the field separator, so concatenating multiple fields with such or :code:`_`

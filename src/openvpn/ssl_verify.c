@@ -5,7 +5,7 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
- *  Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
+ *  Copyright (C) 2002-2024 OpenVPN Inc <sales@openvpn.net>
  *  Copyright (C) 2010-2021 Fox Crypto B.V. <openvpn@foxcrypto.com>
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -23,7 +23,8 @@
  */
 
 /**
- * @file Control Channel Verification Module
+ * @file
+ * Control Channel Verification Module
  */
 
 #ifdef HAVE_CONFIG_H
@@ -31,6 +32,7 @@
 #endif
 
 #include "syshead.h"
+#include <string.h>
 
 #include "base64.h"
 #include "manage.h"
@@ -151,11 +153,11 @@ tls_lock_username(struct tls_multi *multi, const char *username)
 {
     if (multi->locked_username)
     {
-        if (!username || strcmp(username, multi->locked_username))
+        if (strcmp(username, multi->locked_username) != 0)
         {
             msg(D_TLS_ERRORS, "TLS Auth Error: username attempted to change from '%s' to '%s' -- tunnel disabled",
                 multi->locked_username,
-                np(username));
+                username);
 
             /* disable the tunnel */
             tls_deauthenticate(multi);
@@ -164,10 +166,7 @@ tls_lock_username(struct tls_multi *multi, const char *username)
     }
     else
     {
-        if (username)
-        {
-            multi->locked_username = string_alloc(username, NULL);
-        }
+        multi->locked_username = string_alloc(username, NULL);
     }
     return true;
 }
@@ -420,12 +419,12 @@ verify_cert_set_env(struct env_set *es, openvpn_x509_cert_t *peer_cert, int cert
     }
 
     /* export subject name string as environmental variable */
-    openvpn_snprintf(envname, sizeof(envname), "tls_id_%d", cert_depth);
+    snprintf(envname, sizeof(envname), "tls_id_%d", cert_depth);
     setenv_str(es, envname, subject);
 
 #if 0
     /* export common name string as environmental variable */
-    openvpn_snprintf(envname, sizeof(envname), "tls_common_name_%d", cert_depth);
+    snprintf(envname, sizeof(envname), "tls_common_name_%d", cert_depth);
     setenv_str(es, envname, common_name);
 #endif
 
@@ -434,27 +433,51 @@ verify_cert_set_env(struct env_set *es, openvpn_x509_cert_t *peer_cert, int cert
         struct buffer sha1 = x509_get_sha1_fingerprint(peer_cert, &gc);
         struct buffer sha256 = x509_get_sha256_fingerprint(peer_cert, &gc);
 
-        openvpn_snprintf(envname, sizeof(envname), "tls_digest_%d", cert_depth);
+        snprintf(envname, sizeof(envname), "tls_digest_%d", cert_depth);
         setenv_str(es, envname,
                    format_hex_ex(BPTR(&sha1), BLEN(&sha1), 0, 1, ":", &gc));
 
-        openvpn_snprintf(envname, sizeof(envname), "tls_digest_sha256_%d",
-                         cert_depth);
+        snprintf(envname, sizeof(envname), "tls_digest_sha256_%d",
+                 cert_depth);
         setenv_str(es, envname,
                    format_hex_ex(BPTR(&sha256), BLEN(&sha256), 0, 1, ":", &gc));
     }
 
     /* export serial number as environmental variable */
     serial = backend_x509_get_serial(peer_cert, &gc);
-    openvpn_snprintf(envname, sizeof(envname), "tls_serial_%d", cert_depth);
+    snprintf(envname, sizeof(envname), "tls_serial_%d", cert_depth);
     setenv_str(es, envname, serial);
 
     /* export serial number in hex as environmental variable */
     serial = backend_x509_get_serial_hex(peer_cert, &gc);
-    openvpn_snprintf(envname, sizeof(envname), "tls_serial_hex_%d", cert_depth);
+    snprintf(envname, sizeof(envname), "tls_serial_hex_%d", cert_depth);
     setenv_str(es, envname, serial);
 
     gc_free(&gc);
+}
+
+/**
+ * Exports the certificate in \c peer_cert into the environment and adds
+ * the filname
+ */
+static bool
+verify_cert_cert_export_env(struct env_set *es, openvpn_x509_cert_t *peer_cert,
+                            const char *pem_export_fname)
+{
+    /* export the path to the current certificate in pem file format */
+    setenv_str(es, "peer_cert", pem_export_fname);
+
+    return backend_x509_write_pem(peer_cert, pem_export_fname) == SUCCESS;
+}
+
+static void
+verify_cert_cert_delete_env(struct env_set *es, const char *pem_export_fname)
+{
+    env_set_del(es, "peer_cert");
+    if (pem_export_fname)
+    {
+        unlink(pem_export_fname);
+    }
 }
 
 /*
@@ -544,7 +567,7 @@ verify_check_crl_dir(const char *crl_dir, openvpn_x509_cert_t *cert,
         goto cleanup;
     }
 
-    if (!openvpn_snprintf(fn, sizeof(fn), "%s%c%s", crl_dir, PATH_SEPARATOR, serial))
+    if (!snprintf(fn, sizeof(fn), "%s%c%s", crl_dir, PATH_SEPARATOR, serial))
     {
         msg(D_HANDSHAKE, "VERIFY CRL: filename overflow");
         goto cleanup;
@@ -572,18 +595,19 @@ cleanup:
 result_t
 verify_cert(struct tls_session *session, openvpn_x509_cert_t *cert, int cert_depth)
 {
+    /* need to define these variables here so goto cleanup will always have
+     * them defined */
     result_t ret = FAILURE;
-    char *subject = NULL;
-    const struct tls_options *opt;
     struct gc_arena gc = gc_new();
+    const char *pem_export_fname = NULL;
 
-    opt = session->opt;
+    const struct tls_options *opt = session->opt;
     ASSERT(opt);
 
     session->verified = false;
 
     /* get the X509 name */
-    subject = x509_get_subject(cert, &gc);
+    char *subject = x509_get_subject(cert, &gc);
     if (!subject)
     {
         msg(D_TLS_ERRORS, "VERIFY ERROR: depth=%d, could not extract X509 "
@@ -691,9 +715,9 @@ verify_cert(struct tls_session *session, openvpn_x509_cert_t *cert, int cert_dep
         {
             const char *hex_fp = format_hex_ex(BPTR(&cert_fp), BLEN(&cert_fp),
                                                0, 1, ":", &gc);
-            msg(D_TLS_ERRORS, "TLS Error: --tls-verify/--peer-fingerprint"
-                "certificate hash verification failed. (got "
-                "fingerprint: %s", hex_fp);
+            msg(D_TLS_ERRORS, "TLS Error: --tls-verify/--peer-fingerprint "
+                "certificate hash verification failed. (got certificate "
+                "fingerprint: %s)", hex_fp);
             goto cleanup;
         }
     }
@@ -706,6 +730,19 @@ verify_cert(struct tls_session *session, openvpn_x509_cert_t *cert, int cert_dep
 
     session->verify_maxlevel = max_int(session->verify_maxlevel, cert_depth);
 
+    if (opt->export_peer_cert_dir)
+    {
+        pem_export_fname = platform_create_temp_file(opt->export_peer_cert_dir,
+                                                     "pef", &gc);
+
+        if (!pem_export_fname
+            || !verify_cert_cert_export_env(opt->es, cert, pem_export_fname))
+        {
+            msg(D_TLS_ERRORS, "TLS Error: Failed to export certificate for "
+                "--tls-export-cert in %s", opt->export_peer_cert_dir);
+            goto cleanup;
+        }
+    }
     /* export certificate values to the environment */
     verify_cert_set_env(opt->es, cert, cert_depth, subject, common_name,
                         opt->x509_track);
@@ -757,12 +794,13 @@ verify_cert(struct tls_session *session, openvpn_x509_cert_t *cert, int cert_dep
     ret = SUCCESS;
 
 cleanup:
-
+    verify_cert_cert_delete_env(opt->es, pem_export_fname);
     if (ret != SUCCESS)
     {
         tls_clear_error(); /* always? */
         session->verified = false; /* double sure? */
     }
+
     gc_free(&gc);
 
     return ret;
@@ -898,9 +936,9 @@ key_state_check_auth_pending_file(struct auth_deferred_status *ads,
             if (!check_auth_pending_method(multi->peer_info, pending_method))
             {
                 char buf[128];
-                openvpn_snprintf(buf, sizeof(buf),
-                                 "Authentication failed, required pending auth "
-                                 "method '%s' not supported", pending_method);
+                snprintf(buf, sizeof(buf),
+                         "Authentication failed, required pending auth "
+                         "method '%s' not supported", pending_method);
                 auth_set_client_reason(multi, buf);
                 msg(M_INFO, "Client does not supported auth pending method "
                     "'%s'", pending_method);
@@ -1553,6 +1591,8 @@ verify_user_pass(struct user_pass *up, struct tls_multi *multi,
                  struct tls_session *session)
 {
     struct key_state *ks = &session->key[KS_PRIMARY];      /* primary key */
+
+    ASSERT(up && !up->protected);
 
 #ifdef ENABLE_MANAGEMENT
     int man_def_auth = KMDA_UNDEF;

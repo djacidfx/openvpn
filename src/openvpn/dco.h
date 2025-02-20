@@ -5,9 +5,9 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
- *  Copyright (C) 2021-2023 Arne Schwabe <arne@rfc2549.org>
- *  Copyright (C) 2021-2023 Antonio Quartulli <a@unstable.cc>
- *  Copyright (C) 2021-2023 OpenVPN Inc <sales@openvpn.net>
+ *  Copyright (C) 2021-2024 Arne Schwabe <arne@rfc2549.org>
+ *  Copyright (C) 2021-2024 Antonio Quartulli <a@unstable.cc>
+ *  Copyright (C) 2021-2024 OpenVPN Inc <sales@openvpn.net>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2
@@ -106,9 +106,10 @@ bool dco_check_pull_options(int msglevel, const struct options *o);
  *
  * @param mode      the instance operating mode (P2P or multi-peer)
  * @param dco       the context to initialize
+ * @param dev_node  device node, used on Windows to specify certain DCO adapter
  * @return          true on success, false otherwise
  */
-bool ovpn_dco_init(int mode, dco_context_t *dco);
+bool ovpn_dco_init(int mode, dco_context_t *dco, const char *dev_node);
 
 /**
  * Open/create a DCO interface
@@ -247,8 +248,17 @@ int dco_get_peer_stats(struct context *c);
  *
  * @return                   list of colon-separated ciphers
  */
-const char *dco_get_supported_ciphers();
+const char *dco_get_supported_ciphers(void);
 
+/**
+ * Return whether the dco implementation supports the new protocol features of
+ * a 64 bit packet counter and AEAD tag at the end.
+ */
+static inline bool
+dco_supports_epoch_data(struct context *c)
+{
+    return false;
+}
 #else /* if defined(ENABLE_DCO) */
 
 typedef void *dco_context_t;
@@ -284,7 +294,7 @@ dco_check_pull_options(int msglevel, const struct options *o)
 }
 
 static inline bool
-ovpn_dco_init(int mode, dco_context_t *dco)
+ovpn_dco_init(int mode, dco_context_t *dco, const char *dev_node)
 {
     return true;
 }
@@ -375,10 +385,15 @@ dco_get_peer_stats(struct context *c)
 }
 
 static inline const char *
-dco_get_supported_ciphers()
+dco_get_supported_ciphers(void)
 {
     return "";
 }
 
+static inline bool
+dco_supports_epoch_data(struct context *c)
+{
+    return false;
+}
 #endif /* defined(ENABLE_DCO) */
 #endif /* ifndef DCO_H */

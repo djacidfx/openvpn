@@ -32,6 +32,7 @@
 
 #include "buffer.h"
 #include "buffer.c"
+#include "test_common.h"
 
 static void
 test_buffer_strprefix(void **state)
@@ -48,7 +49,6 @@ test_buffer_strprefix(void **state)
 #define teststr1 "one"
 #define teststr2 "two"
 #define teststr3 "three"
-#define teststr4 "four"
 
 #define assert_buf_equals_str(buf, str) \
     assert_int_equal(BLEN(buf), strlen(str)); \
@@ -353,9 +353,110 @@ test_character_class(void **state)
     assert_string_equal(buf, "There is a .'nice.' \"1234\" [.] year old .tree!");
 }
 
+
+static void
+test_character_string_mod_buf(void **state)
+{
+    struct gc_arena gc = gc_new();
+
+    struct buffer buf = alloc_buf_gc(1024, &gc);
+
+    const char test1[] =  "There is a nice 1234\x00 year old tree!";
+    buf_write(&buf, test1, sizeof(test1));
+
+    /* allow the null bytes and string but not the ! */
+    assert_false(string_check_buf(&buf, CC_ALNUM | CC_SPACE | CC_NULL, 0));
+
+    /* remove final ! and null byte to pass */
+    buf_inc_len(&buf, -2);
+    assert_true(string_check_buf(&buf, CC_ALNUM | CC_SPACE | CC_NULL, 0));
+
+    /* Check excluding digits works */
+    assert_false(string_check_buf(&buf, CC_ALNUM | CC_SPACE | CC_NULL, CC_DIGIT));
+    gc_free(&gc);
+}
+
+static void
+test_snprintf(void **state)
+{
+    /* we used to have a custom openvpn_snprintf function because some
+     * OS (the comment did not specify which) did not always put the
+     * null byte there. So we unit test this to be sure.
+     *
+     * This probably refers to the MSVC behaviour, see also
+     * https://stackoverflow.com/questions/7706936/is-snprintf-always-null-terminating
+     */
+
+    /* Instead of trying to trick the compiler here, disable the warnings
+     * for this unit test. We know that the results will be truncated
+     * and we want to test that. Not we need the clang as clang-cl (msvc) does
+     * not define __GNUC__ like it does under UNIX(-like) platforms */
+#if defined(__GNUC__) || defined(__clang__)
+/* some clang version do not understand -Wformat-truncation, so ignore the
+ * warning to avoid warnings/errors (-Werror) about unknown pragma/option */
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunknown-warning-option"
+#endif
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
+
+    char buf[10] = { 'a' };
+    int ret = 0;
+
+    ret = snprintf(buf, sizeof(buf), "0123456789abcde");
+    assert_int_equal(ret, 15);
+    assert_int_equal(buf[9], '\0');
+
+    memset(buf, 'b', sizeof(buf));
+    ret = snprintf(buf, sizeof(buf), "- %d - %d -", 77, 88);
+    assert_int_equal(ret, 11);
+    assert_int_equal(buf[9], '\0');
+
+    memset(buf, 'c', sizeof(buf));
+    ret = snprintf(buf, sizeof(buf), "- %8.2f", 77.8899);
+    assert_int_equal(ret, 10);
+    assert_int_equal(buf[9], '\0');
+
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+#endif
+}
+
+void
+test_buffer_chomp(void **state)
+{
+    struct gc_arena gc = gc_new();
+    struct buffer buf = alloc_buf_gc(1024, &gc);
+
+    const char test1[] =  "There is a nice 1234 year old tree!\n\r";
+    buf_write(&buf, test1, sizeof(test1));
+    buf_chomp(&buf);
+    /* Check that our own method agrees */
+    assert_true(string_check_buf(&buf, CC_PRINT | CC_NULL, CC_CRLF));
+    assert_string_equal(BSTR(&buf), "There is a nice 1234 year old tree!");
+
+    struct buffer buf2 = alloc_buf_gc(1024, &gc);
+    const char test2[] =  "CR_RESPONSE,MTIx\x0a\x00";
+    buf_write(&buf2, test2, sizeof(test2));
+    buf_chomp(&buf2);
+
+    buf_chomp(&buf2);
+    /* Check that our own method agrees */
+    assert_true(string_check_buf(&buf2, CC_PRINT | CC_NULL, CC_CRLF));
+    assert_string_equal(BSTR(&buf2), "CR_RESPONSE,MTIx");
+
+    gc_free(&gc);
+}
+
 int
 main(void)
 {
+    openvpn_unit_test_setup();
     const struct CMUnitTest tests[] = {
         cmocka_unit_test(test_buffer_strprefix),
         cmocka_unit_test(test_buffer_printf_catrunc),
@@ -385,6 +486,9 @@ main(void)
         cmocka_unit_test(test_buffer_free_gc_two),
         cmocka_unit_test(test_buffer_gc_realloc),
         cmocka_unit_test(test_character_class),
+        cmocka_unit_test(test_character_string_mod_buf),
+        cmocka_unit_test(test_snprintf),
+        cmocka_unit_test(test_buffer_chomp)
     };
 
     return cmocka_run_group_tests_name("buffer", tests, NULL, NULL);
